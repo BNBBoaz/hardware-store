@@ -1,0 +1,29 @@
+# ─── Environment (NEVER commit secrets) ───────
+.env
+.env.local
+.env.production
+
+# ─── Dependencies ──────────────────────────────
+node_modules/
+**/node_modules/
+
+# ─── Build output ──────────────────────────────
+dist/
+build/
+.vite/
+
+# ─── Logs ──────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ─── OS files ──────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Editor ────────────────────────────────────
+.vscode/settings.json
+.idea/
+
+# ─── Prisma ────────────────────────────────────
+# (keep schema.prisma in git, but not generated client)
+backend/node_modules/.prisma/

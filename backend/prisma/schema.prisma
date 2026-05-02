@@ -1,0 +1,345 @@
+// ─────────────────────────────────────────────
+//  Prisma Schema — Hardware Store
+//  This file IS your database.
+//  Run: npm run db:migrate  →  creates the tables
+//  Run: npm run db:studio   →  visual database browser
+// ─────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── BUSINESS (top-level tenant) ─────────────
+// Every other table links back to a business.
+// This is what makes the system multi-tenant.
+model Business {
+  id        String   @id @default(uuid())
+  name      String
+  logoUrl   String?
+  createdAt DateTime @default(now())
+
+  branches   Branch[]
+  users      User[]
+  categories Category[]
+  products   Product[]
+  customers  Customer[]
+  suppliers  Supplier[]
+
+  @@map("businesses")
+}
+
+// ─── BRANCHES ─────────────────────────────────
+model Branch {
+  id         String   @id @default(uuid())
+  businessId String
+  name       String
+  address    String?
+  phone      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  business       Business        @relation(fields: [businessId], references: [id])
+  userBranches   UserBranch[]
+  inventory      Inventory[]
+  sales          Sale[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("branches")
+}
+
+// ─── USERS & ROLES ────────────────────────────
+enum Role {
+  OWNER
+  MANAGER
+  CASHIER
+  STOREKEEPER
+  ACCOUNTANT
+}
+
+model User {
+  id           String   @id @default(uuid())
+  businessId   String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  business         Business          @relation(fields: [businessId], references: [id])
+  userBranches     UserBranch[]
+  sales            Sale[]
+  stockMovements   StockMovement[]
+  purchaseOrders   PurchaseOrder[]
+  supplierPayments SupplierPayment[]
+  payments         Payment[]
+
+  @@map("users")
+}
+
+// Junction table — which users belong to which branches
+model UserBranch {
+  userId   String
+  branchId String
+
+  user   User   @relation(fields: [userId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@id([userId, branchId])
+  @@map("user_branches")
+}
+
+// ─── PRODUCTS & CATEGORIES ────────────────────
+model Category {
+  id         String @id @default(uuid())
+  businessId String
+  name       String
+
+  business Business  @relation(fields: [businessId], references: [id])
+  products Product[]
+
+  @@map("categories")
+}
+
+enum Unit {
+  PCS // pieces
+  KG  // kilograms
+  M   // metres
+  L   // litres
+  BAG
+  BOX // boxes / cartons
+}
+
+model Product {
+  id           String   @id @default(uuid())
+  businessId   String
+  categoryId   String?
+  name         String
+  sku          String   @unique
+  unit         Unit
+  buyingPrice  Decimal  @db.Decimal(10, 2)
+  sellingPrice Decimal  @db.Decimal(10, 2)
+  vatRate      Decimal  @db.Decimal(5, 2) @default(16.00) // 16% Kenya VAT
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  business   Business            @relation(fields: [businessId], references: [id])
+  category   Category?           @relation(fields: [categoryId], references: [id])
+  inventory  Inventory[]
+  saleItems  SaleItem[]
+  poItems    PurchaseOrderItem[]
+
+  @@map("products")
+}
+
+// ─── INVENTORY ────────────────────────────────
+// Stock is tracked PER PRODUCT PER BRANCH.
+// One product in 3 branches = 3 inventory rows.
+model Inventory {
+  id           String  @id @default(uuid())
+  productId    String
+  branchId     String
+  quantity     Decimal @db.Decimal(10, 3)
+  reorderLevel Decimal @db.Decimal(10, 3) @default(0)
+
+  product        Product         @relation(fields: [productId], references: [id])
+  branch         Branch          @relation(fields: [branchId], references: [id])
+  stockMovements StockMovement[]
+
+  @@unique([productId, branchId]) // a product can only have one stock record per branch
+  @@map("inventory")
+}
+
+// ─── STOCK MOVEMENTS (audit log) ─────────────
+// Every stock change creates a row here.
+// This table is NEVER updated or deleted — append only.
+enum MovementType {
+  SALE        // stock went out due to a sale
+  DELIVERY    // stock came in from a supplier
+  ADJUSTMENT  // manual correction (damage, theft, count)
+  RETURN      // customer returned goods
+}
+
+model StockMovement {
+  id          String       @id @default(uuid())
+  inventoryId String
+  userId      String
+  quantity    Decimal      @db.Decimal(10, 3) // positive = in, negative = out
+  type        MovementType
+  reason      String?      // required for ADJUSTMENT type
+  referenceId String?      // links to a sale_id or purchase_order_id
+  createdAt   DateTime     @default(now())
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("stock_movements")
+}
+
+// ─── CUSTOMERS ────────────────────────────────
+model Customer {
+  id            String   @id @default(uuid())
+  businessId    String
+  name          String
+  phone         String?
+  email         String?
+  creditLimit   Decimal  @db.Decimal(10, 2) @default(0)
+  creditBalance Decimal  @db.Decimal(10, 2) @default(0) // amount currently owed
+  createdAt     DateTime @default(now())
+
+  business Business  @relation(fields: [businessId], references: [id])
+  sales    Sale[]
+  payments Payment[]
+
+  @@map("customers")
+}
+
+// ─── SALES ────────────────────────────────────
+enum SaleStatus {
+  COMPLETED
+  ON_HOLD   // cashier put it on hold
+  REFUNDED
+}
+
+model Sale {
+  id         String     @id @default(uuid())
+  branchId   String
+  cashierId  String
+  customerId String?    // optional — walk-in customers don't need an account
+  subtotal   Decimal    @db.Decimal(10, 2)
+  vatAmount  Decimal    @db.Decimal(10, 2) @default(0)
+  discount   Decimal    @db.Decimal(10, 2) @default(0)
+  total      Decimal    @db.Decimal(10, 2)
+  status     SaleStatus @default(COMPLETED)
+  createdAt  DateTime   @default(now())
+
+  branch    Branch     @relation(fields: [branchId], references: [id])
+  cashier   User       @relation(fields: [cashierId], references: [id])
+  customer  Customer?  @relation(fields: [customerId], references: [id])
+  saleItems SaleItem[]
+  payments  Payment[]
+
+  @@map("sales")
+}
+
+// Line items — one row per product in the cart
+model SaleItem {
+  id        String  @id @default(uuid())
+  saleId    String
+  productId String
+  quantity  Decimal @db.Decimal(10, 3)
+  unitPrice Decimal @db.Decimal(10, 2) // price AT TIME OF SALE (product price may change later)
+  discount  Decimal @db.Decimal(10, 2) @default(0)
+  total     Decimal @db.Decimal(10, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("sale_items")
+}
+
+// ─── PAYMENTS (received from customers) ───────
+enum PaymentMethod {
+  CASH
+  MPESA
+  BANK_TRANSFER
+  CHEQUE
+  CREDIT         // customer charges to their account
+}
+
+model Payment {
+  id           String        @id @default(uuid())
+  saleId       String?       // null if this is a credit account settlement (not tied to one sale)
+  customerId   String?
+  receivedById String
+  amount       Decimal       @db.Decimal(10, 2)
+  method       PaymentMethod
+  reference    String?       // M-Pesa code, cheque number, etc.
+  createdAt    DateTime      @default(now())
+
+  sale       Sale?     @relation(fields: [saleId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  receivedBy User      @relation(fields: [receivedById], references: [id])
+
+  @@map("payments")
+}
+
+// ─── SUPPLIERS ────────────────────────────────
+model Supplier {
+  id            String   @id @default(uuid())
+  businessId    String
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  balanceOwed   Decimal  @db.Decimal(10, 2) @default(0) // how much we owe them
+  createdAt     DateTime @default(now())
+
+  business         Business          @relation(fields: [businessId], references: [id])
+  purchaseOrders   PurchaseOrder[]
+  supplierPayments SupplierPayment[]
+
+  @@map("suppliers")
+}
+
+// ─── PURCHASE ORDERS (LPOs) ───────────────────
+enum POStatus {
+  DRAFT              // being prepared
+  SENT               // sent to supplier
+  PARTIALLY_RECEIVED // some goods arrived
+  FULLY_RECEIVED     // all goods arrived
+}
+
+model PurchaseOrder {
+  id           String    @id @default(uuid())
+  branchId     String
+  supplierId   String
+  createdById  String
+  status       POStatus  @default(DRAFT)
+  totalAmount  Decimal   @db.Decimal(10, 2)
+  orderDate    DateTime  @default(now())
+  expectedDate DateTime?
+  notes        String?
+
+  branch     Branch              @relation(fields: [branchId], references: [id])
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  createdBy  User                @relation(fields: [createdById], references: [id])
+  items      PurchaseOrderItem[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String  @id @default(uuid())
+  purchaseOrderId String
+  productId       String
+  qtyOrdered      Decimal @db.Decimal(10, 3)
+  qtyReceived     Decimal @db.Decimal(10, 3) @default(0) // updated as goods arrive
+  unitCost        Decimal @db.Decimal(10, 2)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@map("purchase_order_items")
+}
+
+// ─── SUPPLIER PAYMENTS ────────────────────────
+model SupplierPayment {
+  id         String        @id @default(uuid())
+  supplierId String
+  paidById   String
+  amount     Decimal       @db.Decimal(10, 2)
+  method     PaymentMethod
+  reference  String?
+  createdAt  DateTime      @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  paidBy   User     @relation(fields: [paidById], references: [id])
+
+  @@map("supplier_payments")
+}
