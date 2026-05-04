@@ -2,11 +2,11 @@
 //  Hardware Store — Backend Entry Point
 //  This is where the Express server starts.
 // ─────────────────────────────────────────────
-import authRoutes from './routes/auth.js';
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-
+import authRoutes from './routes/auth.js';
+import categoryRoutes from './routes/categories.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -35,6 +35,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 // app.use('/api/products',  productRoutes);
 // app.use('/api/inventory', inventoryRoutes);
+app.use('/api/categories', categoryRoutes);
 // app.use('/api/sales',     saleRoutes);
 // app.use('/api/customers', customerRoutes);
 // app.use('/api/suppliers', supplierRoutes);
