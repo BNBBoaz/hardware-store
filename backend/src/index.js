@@ -7,6 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import categoryRoutes from './routes/categories.js';
+import productRoutes from './routes/products.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -33,7 +34,7 @@ app.get('/api/health', (req, res) => {
 
 // ── Routes ────────────────────────────────────
 app.use('/api/auth', authRoutes);
-// app.use('/api/products',  productRoutes);
+app.use('/api/products',  productRoutes);
 // app.use('/api/inventory', inventoryRoutes);
 app.use('/api/categories', categoryRoutes);
 // app.use('/api/sales',     saleRoutes);
