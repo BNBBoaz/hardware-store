@@ -1,24 +1,16 @@
-# ─────────────────────────────────────────────
-#  Backend Dockerfile (development)
-# ─────────────────────────────────────────────
+FROM node:20-slim
 
-FROM node:20-alpine
+# Install OpenSSL — required by Prisma
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-# Set working directory inside container
 WORKDIR /app
 
-# Copy package files first (Docker layer caching trick —
-# npm install only re-runs if package.json changes)
 COPY package*.json ./
 
-# Install dependencies including nodemon for live reload
 RUN npm install
 
-# Copy the rest of the source code
 COPY . .
 
-# Expose the port Express runs on
 EXPOSE 5000
 
-# Start with nodemon so the server restarts on file changes
 CMD ["npm", "run", "dev"]
