@@ -9,6 +9,9 @@ import authRoutes from './routes/auth.js';
 import categoryRoutes from './routes/categories.js';
 import productRoutes from './routes/products.js';
 import saleRoutes from './routes/sales.js';
+import customerRoutes from './routes/customers.js';
+import supplierRoutes from './routes/suppliers.js';
+import reportRoutes from './routes/reports.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -39,9 +42,9 @@ app.use('/api/products',  productRoutes);
 // app.use('/api/inventory', inventoryRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/sales',     saleRoutes);
-// app.use('/api/customers', customerRoutes);
-// app.use('/api/suppliers', supplierRoutes);
-// app.use('/api/reports',   reportRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/suppliers', supplierRoutes);
+ app.use('/api/reports',   reportRoutes);
 
 // ── 404 handler ───────────────────────────────
 app.use((req, res) => {
