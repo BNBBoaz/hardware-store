@@ -3,8 +3,25 @@ import { reportsAPI } from '../../api';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer
+  Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
+
+// Payment method colors — same as ReportsPage for consistency
+const METHOD_COLORS = {
+  CASH:          '#2E8B57',
+  MPESA:         '#2604ff',
+  CREDIT:        '#F97316',
+  BANK_TRANSFER: '#8B5CF6',
+  CHEQUE:        '#EF4444',
+};
+
+const METHOD_LABELS = {
+  CASH:          'Cash',
+  MPESA:         'M-Pesa',
+  CREDIT:        'Credit',
+  BANK_TRANSFER: 'Bank',
+  CHEQUE:        'Cheque',
+};
 
 const StatCard = ({ label, value, sub, color = 'orange', icon }) => (
   <div className="card flex items-start gap-4">
@@ -25,10 +42,17 @@ const StatCard = ({ label, value, sub, color = 'orange', icon }) => (
   </div>
 );
 
-const kes = (n) => `KES ${Number(n).toLocaleString('en-KE', {
+const kes = (n) => `KES ${Number(n || 0).toLocaleString('en-KE', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 })}`;
+
+// Custom bar that colors each bar by payment method
+const ColoredBar = (props) => {
+  const { x, y, width, height, method } = props;
+  const fill = METHOD_COLORS[method] || '#6B7280';
+  return <rect x={x} y={y} width={width} height={height} fill={fill} rx={4}/>;
+};
 
 export default function DashboardPage() {
   const [data,    setData]    = useState(null);
@@ -49,13 +73,20 @@ export default function DashboardPage() {
 
   if (!data) return null;
 
+  // Build payment data with method label and color for each bar
   const paymentData = Object.entries(data.today.payments)
-    .map(([method, amount]) => ({ method, amount }))
-    .filter(d => d.amount > 0);
+    .filter(([, amount]) => amount > 0)
+    .map(([method, amount]) => ({
+      method,
+      label:  METHOD_LABELS[method] || method,
+      amount,
+      color:  METHOD_COLORS[method] || '#6B7280',
+    }));
 
   return (
     <div className="space-y-6 animate-fadeIn">
 
+      {/* Header */}
       <div>
         <h2 className="font-display text-3xl font-bold text-brand-charcoal">Dashboard</h2>
         <p className="text-brand-gray text-sm mt-1">
@@ -66,59 +97,79 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           label="Today's Sales"
           value={kes(data.today.revenue)}
           sub={`${data.today.salesCount} transaction${data.today.salesCount !== 1 ? 's' : ''}`}
-          color="orange"
-          icon="⊙"
+          color="orange" icon="⊙"
         />
         <StatCard
           label="VAT Collected"
           value={kes(data.today.vat)}
           sub="16% rate"
-          color="blue"
-          icon="⊘"
+          color="blue" icon="⊘"
         />
         <StatCard
           label="Gross Profit"
           value={kes(data.profitSummary.grossProfit)}
           sub={`${data.profitSummary.margin}% margin`}
-          color="green"
-          icon="⊕"
+          color="green" icon="⊕"
         />
         <StatCard
           label="Low Stock Alerts"
           value={data.lowStock.count}
           sub={data.lowStock.count > 0 ? 'Needs attention' : 'All stock levels healthy'}
-          color={data.lowStock.count > 0 ? 'red' : 'green'}
-          icon="⊟"
+          color={data.lowStock.count > 0 ? 'red' : 'green'} icon="⊟"
         />
       </div>
 
+      {/* Charts row */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+        {/* Payment methods bar chart — each method a different color */}
         <div className="card xl:col-span-2">
-          <h3 className="font-display text-lg font-bold text-brand-charcoal mb-4">
-            Today's Payment Methods
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-lg font-bold text-brand-charcoal">
+              Today's Payment Methods
+            </h3>
+            {/* Color legend */}
+            <div className="flex gap-3 flex-wrap">
+              {paymentData.map(p => (
+                <div key={p.method} className="flex items-center gap-1.5 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }}/>
+                  <span className="text-brand-gray">{p.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
           {paymentData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={paymentData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6"/>
-                <XAxis dataKey="method" tick={{ fontSize: 12, fill: '#6B7280' }}/>
-                <YAxis tick={{ fontSize: 12, fill: '#6B7280' }}
-                       tickFormatter={v => `${(v/1000).toFixed(0)}k`}/>
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                />
                 <Tooltip
                   formatter={(value) => [kes(value), 'Amount']}
                   contentStyle={{
-                    fontFamily: 'DM Sans, sans-serif',
-                    fontSize: 13,
-                    border: '1px solid #E5E7EB',
+                    fontFamily:   'DM Sans, sans-serif',
+                    fontSize:     13,
+                    border:       '1px solid #E5E7EB',
                     borderRadius: 8,
                   }}
                 />
-                <Bar dataKey="amount" fill="#F97316" radius={[4, 4, 0, 0]}/>
+                <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                  {paymentData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color}/>
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -128,6 +179,7 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Profit summary */}
         <div className="card">
           <h3 className="font-display text-lg font-bold text-brand-charcoal mb-4">
             Profit Summary
@@ -159,7 +211,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Bottom row */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+        {/* Outstanding customer balances */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-lg font-bold text-brand-charcoal">
@@ -196,6 +251,7 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Supplier payments due */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-lg font-bold text-brand-charcoal">
@@ -230,13 +286,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Low stock alerts */}
       {data.lowStock.count > 0 && (
         <div className="card border-red-200">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-red-500 text-lg">⚠</span>
-            <h3 className="font-display text-lg font-bold text-brand-charcoal">
-              Low Stock Alerts
-            </h3>
+            <h3 className="font-display text-lg font-bold text-brand-charcoal">Low Stock Alerts</h3>
             <span className="badge-red">{data.lowStock.count} items</span>
           </div>
           <div className="table-wrapper">

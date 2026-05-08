@@ -6,10 +6,30 @@ import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 
-const COLORS = ['#F97316', '#3B82F6', '#10B981', '#8B5CF6', '#EF4444'];
-const PAYMENT_METHODS = ['CASH', 'MPESA', 'CREDIT', 'BANK', 'CHEQUE'];
+// Payment method colors — same as DashboardPage for consistency
+const METHOD_COLORS = {
+  CASH:          '#2E8B57',
+  MPESA:         '#2604ff',
+  CREDIT:        '#F97316',
+  BANK_TRANSFER: '#8B5CF6',
+  CHEQUE:        '#EF4444',
+};
 
-const kes = (n) => `KES ${Number(n || 0).toLocaleString('en-KE')}`;
+const METHOD_LABELS = {
+  CASH:          'Cash',
+  MPESA:         'M-Pesa',
+  CREDIT:        'Credit',
+  BANK_TRANSFER: 'Bank',
+  CHEQUE:        'Cheque',
+};
+
+const COLORS = ['#F97316', '#3B82F6', '#10B981', '#8B5CF6', '#EF4444'];
+const PAYMENT_METHODS = ['CASH', 'MPESA', 'CREDIT', 'BANK_TRANSFER', 'CHEQUE'];
+
+const kes = (n) => `KES ${Number(n || 0).toLocaleString('en-KE', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})}`;
 
 export default function ReportsPage() {
   const [data, setData] = useState(null);
@@ -43,35 +63,60 @@ export default function ReportsPage() {
 
   if (!data || !data.summary) return null;
 
-  // Build payment breakdown — handles BOTH backend formats
-  const paymentTotals = {};
-  PAYMENT_METHODS.forEach(m => paymentTotals[m] = 0);
+  // ── Real data from backend (same patterns as DashboardPage) ──
+
+  // Use real profit summary if available, fallback to summary
+  const profitSummary = data.profitSummary || {
+    grossProfit: data.summary.grossProfit || 0,
+    margin: data.summary.profitMargin || 0,
+    totalRevenue: data.summary.totalRevenue || 0,
+    totalCOGS: data.summary.totalCOGS || 0,
+  };
+
+  // Payment data — use backend-aggregated payments if available, else compute from sales
+  let paymentData = [];
   
-  (data.sales || []).forEach(sale => {
-    // Format 1: nested payments array (newer backend)
-    if (sale.payments && Array.isArray(sale.payments) && sale.payments.length > 0) {
-      sale.payments.forEach(p => {
-        const method = p.method || 'CASH';
-        paymentTotals[method] = (paymentTotals[method] || 0) + parseFloat(p.amount || 0);
-      });
-    }
-    // Format 2: single paymentMethod string on sale (older backend)
-    else if (sale.paymentMethod) {
-      const method = sale.paymentMethod;
-      paymentTotals[method] = (paymentTotals[method] || 0) + parseFloat(sale.total || 0);
-    }
-    // Format 3: no payment info — assume CASH
-    else {
-      paymentTotals['CASH'] = (paymentTotals['CASH'] || 0) + parseFloat(sale.total || 0);
-    }
-  });
+  if (data.payments || data.summary?.payments) {
+    // Backend provides pre-aggregated payments (preferred)
+    const payments = data.payments || data.summary.payments;
+    paymentData = Object.entries(payments)
+      .filter(([, amount]) => amount > 0)
+      .map(([method, amount]) => ({
+        method,
+        label: METHOD_LABELS[method] || method,
+        amount,
+        color: METHOD_COLORS[method] || '#6B7280',
+      }));
+  } else {
+    // Fallback: compute from sales array (legacy format)
+    const paymentTotals = {};
+    PAYMENT_METHODS.forEach(m => paymentTotals[m] = 0);
+    
+    (data.sales || []).forEach(sale => {
+      if (sale.payments && Array.isArray(sale.payments) && sale.payments.length > 0) {
+        sale.payments.forEach(p => {
+          const method = p.method || 'CASH';
+          paymentTotals[method] = (paymentTotals[method] || 0) + parseFloat(p.amount || 0);
+        });
+      } else if (sale.paymentMethod) {
+        const method = sale.paymentMethod;
+        paymentTotals[method] = (paymentTotals[method] || 0) + parseFloat(sale.total || 0);
+      } else {
+        paymentTotals['CASH'] = (paymentTotals['CASH'] || 0) + parseFloat(sale.total || 0);
+      }
+    });
 
-  const paymentData = PAYMENT_METHODS.map(method => ({
-    method,
-    amount: paymentTotals[method] || 0,
-  }));
+    paymentData = PAYMENT_METHODS
+      .filter(method => paymentTotals[method] > 0)
+      .map(method => ({
+        method,
+        label: METHOD_LABELS[method] || method,
+        amount: paymentTotals[method],
+        color: METHOD_COLORS[method] || '#6B7280',
+      }));
+  }
 
-  // Build daily sales
+  // Build daily sales trend
   const dailyMap = {};
   (data.sales || []).forEach(sale => {
     const date = new Date(sale.createdAt).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric' });
@@ -96,33 +141,33 @@ export default function ReportsPage() {
         </select>
       </div>
 
-      {/* Gradient stat cards */}
+      {/* Stat cards — using REAL data instead of estimates */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {[
+        {[ 
           { 
             label: 'Total Revenue', 
             value: kes(data.summary.totalRevenue), 
-            sub: `${data.summary.totalSales} sales`,
+            sub: `${data.summary.totalSales || data.summary.salesCount || 0} sales`,
             gradient: 'from-orange-500 to-orange-600',
             icon: '💰'
           },
           { 
             label: 'Gross Profit', 
-            value: kes(data.summary.totalRevenue * 0.25), 
-            sub: 'Est. 25% margin',
+            value: kes(profitSummary.grossProfit), 
+            sub: `${profitSummary.margin}% margin`,
             gradient: 'from-green-500 to-green-600',
             icon: '📈'
           },
           { 
             label: 'VAT Collected', 
-            value: kes(data.summary.totalVAT), 
+            value: kes(data.summary.totalVAT || data.summary.vat || 0), 
             sub: '16% rate',
             gradient: 'from-blue-500 to-blue-600',
             icon: '🏛️'
           },
           { 
             label: 'Discounts Given', 
-            value: kes(data.summary.totalDiscount), 
+            value: kes(data.summary.totalDiscount || 0), 
             sub: 'Promotions',
             gradient: 'from-purple-500 to-purple-600',
             icon: '🏷️'
@@ -178,48 +223,89 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* Payment methods — Donut chart with ALL methods */}
+        {/* Payment methods — Donut chart with real backend data */}
         <div className="card">
           <h3 className="font-display text-lg font-bold text-brand-charcoal mb-4">Payment Methods</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie 
-                data={paymentData} 
-                cx="50%" 
-                cy="50%" 
-                innerRadius={55} 
-                outerRadius={75} 
-                paddingAngle={3} 
-                dataKey="amount"
-                stroke="none"
-              >
-                {paymentData.map((entry, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} opacity={entry.amount > 0 ? 1 : 0.2}/>
+          {paymentData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie 
+                    data={paymentData} 
+                    cx="50%" 
+                    cy="50%" 
+                    innerRadius={55} 
+                    outerRadius={75} 
+                    paddingAngle={3} 
+                    dataKey="amount"
+                    stroke="none"
+                  >
+                    {paymentData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color || COLORS[i % COLORS.length]} opacity={entry.amount > 0 ? 1 : 0.2}/>
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(v, n, props) => [kes(v), props.payload.label || props.payload.method]} 
+                    contentStyle={{ fontFamily: 'DM Sans', fontSize: 13, border: 'none', borderRadius: 12, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              
+              {/* Method breakdown list */}
+              <div className="space-y-2 mt-2">
+                {paymentData.map((d, i) => (
+                  <div key={d.method} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color || COLORS[i % COLORS.length], opacity: d.amount > 0 ? 1 : 0.3 }}/>
+                      <span className={d.amount > 0 ? 'text-brand-charcoal font-medium' : 'text-brand-gray'}>{d.label || d.method}</span>
+                    </div>
+                    <span className={`font-mono font-medium ${d.amount > 0 ? 'text-brand-charcoal' : 'text-brand-gray'}`}>
+                      {kes(d.amount)}
+                    </span>
+                  </div>
                 ))}
-              </Pie>
-              <Tooltip 
-                formatter={(v, n) => [kes(v), n]} 
-                contentStyle={{ fontFamily: 'DM Sans', fontSize: 13, border: 'none', borderRadius: 12, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          
-          {/* Method breakdown list */}
-          <div className="space-y-2 mt-2">
-            {paymentData.map((d, i) => (
-              <div key={d.method} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length], opacity: d.amount > 0 ? 1 : 0.3 }}/>
-                  <span className={d.amount > 0 ? 'text-brand-charcoal font-medium' : 'text-brand-gray'}>{d.method}</span>
-                </div>
-                <span className={`font-mono font-medium ${d.amount > 0 ? 'text-brand-charcoal' : 'text-brand-gray'}`}>
-                  {kes(d.amount)}
-                </span>
+              </div>
+            </>
+          ) : (
+            <div className="h-48 flex items-center justify-center text-brand-gray text-sm">
+              No payment data for this period
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Profit Summary — NEW: Real data section matching DashboardPage */}
+      {profitSummary.grossProfit > 0 && (
+        <div className="card">
+          <h3 className="font-display text-lg font-bold text-brand-charcoal mb-4">
+            Profit Summary
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[ 
+              { label: 'Total Revenue', value: kes(profitSummary.totalRevenue || data.summary.totalRevenue), color: 'text-brand-charcoal' },
+              { label: 'Cost of Goods', value: kes(profitSummary.totalCOGS || 0), color: 'text-red-500' },
+              { label: 'Gross Profit',  value: kes(profitSummary.grossProfit),  color: 'text-green-600' },
+            ].map(row => (
+              <div key={row.label} className="flex flex-col p-4 bg-brand-gray-light rounded-xl">
+                <span className="text-xs text-brand-gray uppercase tracking-wider mb-1">{row.label}</span>
+                <span className={`text-xl font-bold font-mono ${row.color}`}>{row.value}</span>
               </div>
             ))}
           </div>
+          <div className="mt-4">
+            <div className="flex justify-between text-xs text-brand-gray mb-1.5">
+              <span>Profit margin</span>
+              <span className="font-semibold text-brand-charcoal">{profitSummary.margin}%</span>
+            </div>
+            <div className="w-full bg-brand-gray-mid rounded-full h-2">
+              <div
+                className="bg-brand-orange h-2 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(profitSummary.margin, 100)}%` }}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Sales table */}
       <div className="card">
@@ -258,10 +344,10 @@ export default function ReportsPage() {
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                       sale.paymentMethod === 'CREDIT' ? 'bg-orange-100 text-orange-700' :
                       sale.paymentMethod === 'MPESA' ? 'bg-blue-100 text-blue-700' :
-                      sale.paymentMethod === 'BANK' ? 'bg-purple-100 text-purple-700' :
+                      sale.paymentMethod === 'BANK_TRANSFER' ? 'bg-purple-100 text-purple-700' :
                       'bg-green-100 text-green-700'
                     }`}>
-                      {sale.paymentMethod || 'CASH'}
+                      {METHOD_LABELS[sale.paymentMethod] || sale.paymentMethod || 'CASH'}
                     </span>
                   </td>
                   <td className="table-cell text-right text-sm">{sale.saleItems?.length || 0}</td>
