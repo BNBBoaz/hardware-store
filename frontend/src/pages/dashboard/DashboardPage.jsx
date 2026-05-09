@@ -8,8 +8,8 @@ import {
 
 // Payment method colors — same as ReportsPage for consistency
 const METHOD_COLORS = {
-  CASH:          '#2E8B57',
-  MPESA:         '#2604ff',
+  CASH:          '#10B981',
+  MPESA:         '#3B82F6',
   CREDIT:        '#F97316',
   BANK_TRANSFER: '#8B5CF6',
   CHEQUE:        '#EF4444',
