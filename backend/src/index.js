@@ -45,3 +45,22 @@ app.listen(PORT, () => {
   console.log(`✅ Backend running on http://localhost:${PORT}`);
   console.log(`📋 Environment: ${process.env.NODE_ENV}`);
 });
+const path = require('path');
+
+// Serve React frontend static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Handle React client-side routing - send index.html for any non-API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+const path = require('path');
+
+// Serve React frontend static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Handle React client-side routing - send index.html for any non-API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
