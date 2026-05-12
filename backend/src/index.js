@@ -40,7 +40,7 @@ app.use('/api/reports',    reportRoutes);
 app.use('/api/users',      userRoutes);
 
 // Serve React frontend static files
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // API 404 handler
 app.use('/api/*', (req, res) => {
@@ -49,7 +49,7 @@ app.use('/api/*', (req, res) => {
 
 // React client-side routing - send index.html for any non-API route
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
 // Global error handler
