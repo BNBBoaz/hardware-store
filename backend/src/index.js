@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes     from './routes/auth.js';
 import categoryRoutes from './routes/categories.js';
 import productRoutes  from './routes/products.js';
@@ -13,9 +15,13 @@ import userRoutes     from './routes/users.js';
 const app  = express();
 const PORT = process.env.PORT || 5000;
 
+// Get __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 app.use(express.json());
 app.use(cors({
-  origin:      process.env.VITE_API_URL || 'http://localhost:3000',
+  origin: true,
   credentials: true,
 }));
 
@@ -23,6 +29,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Hardware Store API is running', timestamp: new Date().toISOString() });
 });
 
+// API routes
 app.use('/api/auth',       authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products',   productRoutes);
@@ -32,35 +39,25 @@ app.use('/api/suppliers',  supplierRoutes);
 app.use('/api/reports',    reportRoutes);
 app.use('/api/users',      userRoutes);
 
-app.use((req, res) => {
+// Serve React frontend static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// API 404 handler
+app.use('/api/*', (req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
 });
 
+// React client-side routing - send index.html for any non-API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Global error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong', message: err.message });
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Backend running on http://localhost:${PORT}`);
-  console.log(`📋 Environment: ${process.env.NODE_ENV}`);
-});
-const path = require('path');
-
-// Serve React frontend static files
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Handle React client-side routing - send index.html for any non-API route
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-const path = require('path');
-
-// Serve React frontend static files
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Handle React client-side routing - send index.html for any non-API route
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  console.log(`✅ Server running on port ${PORT}`);
 });
