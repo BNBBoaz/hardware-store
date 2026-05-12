@@ -330,3 +330,21 @@ export const getPurchaseOrders = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch orders', message: error.message });
   }
 };
+export const deleteSupplier = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.supplier.findFirst({
+      where: { id, businessId: req.user.businessId },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Supplier not found' });
+    }
+    if (parseFloat(existing.balanceOwed) > 0) {
+      return res.status(400).json({ error: 'Cannot delete supplier with outstanding balance' });
+    }
+    await prisma.supplier.delete({ where: { id } });
+    res.json({ message: 'Supplier deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete supplier', message: error.message });
+  }
+};

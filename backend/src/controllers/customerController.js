@@ -225,3 +225,21 @@ export const getOutstandingBalances = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch balances', message: error.message });
   }
 };
+export const deleteCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.customer.findFirst({
+      where: { id, businessId: req.user.businessId },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    if (parseFloat(existing.creditBalance) > 0) {
+      return res.status(400).json({ error: 'Cannot delete customer with outstanding balance' });
+    }
+    await prisma.customer.delete({ where: { id } });
+    res.json({ message: 'Customer deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete customer', message: error.message });
+  }
+};
