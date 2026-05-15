@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
 // Pages
+import UsersPage from './pages/users/UsersPage';
 import LoginPage    from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ProductsPage from './pages/products/ProductsPage';
@@ -26,6 +27,13 @@ const ProtectedRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" replace />;
 };
 
+// OwnerRoute — only OWNER can access Users page
+const OwnerRoute = ({ children }) => {
+  const { user } = useAuth();
+  if (user?.role !== 'OWNER') return <Navigate to="/" replace />;
+  return children;
+};
+
 export default function App() {
   const { user } = useAuth();
 
@@ -46,6 +54,9 @@ export default function App() {
         <Route path="customers" element={<CustomersPage />} />
         <Route path="suppliers" element={<SuppliersPage />} />
         <Route path="reports"   element={<ReportsPage />} />
+        <Route path="users"     element={
+          <OwnerRoute><UsersPage /></OwnerRoute>
+        } />
       </Route>
 
       {/* Fallback */}
