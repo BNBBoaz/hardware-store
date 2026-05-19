@@ -5,12 +5,11 @@ RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists
 
 WORKDIR /app
 
-COPY package*.json ./
+# Copy ALL files first (including prisma schema)
+COPY . .
 
 RUN npm install
 
-COPY . .
-
 EXPOSE 5000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "start"]
