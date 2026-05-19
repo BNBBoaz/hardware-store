@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate  = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true); // Start open on desktop
 
   const handleLogout = () => {
     logout();
@@ -30,7 +30,7 @@ export default function Layout() {
 
   const SidebarContent = () => (
     <>
-      {/* Logo */}
+      {/* Logo + close button */}
       <div className="px-5 py-5 border-b border-brand-charcoal-mid flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-white tracking-wide">
@@ -40,10 +40,10 @@ export default function Layout() {
             {user?.business?.name || 'Loading...'}
           </p>
         </div>
-        {/* Close button — mobile only */}
+        {/* Close button — visible when sidebar is collapsible */}
         <button
           onClick={() => setSidebarOpen(false)}
-          className="lg:hidden text-gray-400 hover:text-white text-xl p-1"
+          className="text-gray-400 hover:text-white text-xl p-1"
         >
           ✕
         </button>
@@ -95,48 +95,57 @@ export default function Layout() {
   return (
     <div className="flex h-screen overflow-hidden bg-brand-gray-light">
 
-      {/* ── Desktop sidebar (always visible on lg+) ── */}
-      <aside className="hidden lg:flex w-60 bg-brand-charcoal flex-col flex-shrink-0">
-        <SidebarContent/>
-      </aside>
-
-      {/* ── Mobile sidebar overlay ── */}
+      {/* ── Sidebar ── */}
       {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
-          />
-          {/* Sidebar panel */}
-          <aside className="relative w-72 bg-brand-charcoal flex flex-col z-10 animate-slideIn">
-            <SidebarContent/>
-          </aside>
-        </div>
+        <aside className="w-60 bg-brand-charcoal flex-col flex-shrink-0 fixed lg:relative z-40 h-full">
+          <SidebarContent/>
+        </aside>
+      )}
+
+      {/* ── Mobile overlay backdrop ── */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
       {/* ── Main content ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-        {/* Mobile topbar */}
-        <header className="lg:hidden bg-brand-charcoal px-4 py-3 flex items-center justify-between flex-shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="text-white p-1.5 rounded-lg hover:bg-brand-charcoal-mid transition-colors"
-            aria-label="Open menu"
-          >
-            {/* Hamburger icon */}
-            <div className="w-5 h-0.5 bg-white mb-1"/>
-            <div className="w-5 h-0.5 bg-white mb-1"/>
-            <div className="w-5 h-0.5 bg-white"/>
-          </button>
+        {/* Topbar with hamburger */}
+        <header className="bg-brand-charcoal px-4 py-3 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Hamburger — always visible */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-white p-1.5 rounded-lg hover:bg-brand-charcoal-mid transition-colors"
+              aria-label="Toggle menu"
+            >
+              {sidebarOpen ? (
+                <span className="text-xl">✕</span>
+              ) : (
+                <>
+                  <div className="w-5 h-0.5 bg-white mb-1"/>
+                  <div className="w-5 h-0.5 bg-white mb-1"/>
+                  <div className="w-5 h-0.5 bg-white"/>
+                </>
+              )}
+            </button>
 
-          <h1 className="font-display text-xl font-bold text-white">
-            HARDWARE<span className="text-brand-orange">OS</span>
-          </h1>
+            <h1 className="font-display text-xl font-bold text-white">
+              HARDWARE<span className="text-brand-orange">OS</span>
+            </h1>
+          </div>
 
-          <div className="w-8 h-8 rounded-full bg-brand-orange flex items-center justify-center text-white text-sm font-bold">
-            {user?.name?.[0]?.toUpperCase()}
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:block text-right">
+              <p className="text-white text-sm font-medium">{user?.name}</p>
+              <p className="text-gray-400 text-xs capitalize">{user?.role?.toLowerCase()}</p>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-brand-orange flex items-center justify-center text-white text-sm font-bold">
+              {user?.name?.[0]?.toUpperCase()}
+            </div>
           </div>
         </header>
 
